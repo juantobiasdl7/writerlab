@@ -1,9 +1,67 @@
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
+import { Form, useActionData} from "@remix-run/react";
+import { createUser, createUserSession, getUserId, validateUserSession } from "~/utils/auth.server";
+
 import { Link } from '@remix-run/react'
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/components/ui/card"
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import { getZodConstraint, parseWithZod } from '@conform-to/zod'
+import { z } from 'zod'
+
+// Definimos el schema de validación
+const signupSchema = z.object({
+  email: z.string().email('Email inválido'),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+  name: z.string().min(1, 'El nombre es requerido')
+})
+
+// Loader para redireccionar si ya hay sesión
+export async function loader({ request }: LoaderFunctionArgs) {
+  //await validateUserSession(request);
+  const userId = await getUserId(request);
+  if (userId) return redirect("/dashboard");
+  return Response.json({});
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  const submission = parseWithZod(await request.formData(), { 
+    schema: signupSchema 
+  })
+
+  if (submission.status !== "success") {
+    return Response.json(submission.reply(), { status: 400 })
+  }
+
+  const { email, password, name } = submission.value
+
+  try {
+    const user = await createUser(email, password, name)
+    return createUserSession(user.id, "/dashboard")
+  } catch (error) {
+    return Response.json(
+      submission.reply({ 
+        formErrors: ['Error al crear el usuario']
+      }), 
+      { status: 500 }
+    )
+  }
+}
 
 export default function SignupPage() {
+  const actionData = useActionData<typeof action>()
+
+  const [form, fields] = useForm({
+    id: "signup-form",
+    constraint: getZodConstraint(signupSchema),
+    lastResult: actionData,
+    onValidate({ formData }) {
+      return parseWithZod(formData, { schema: signupSchema })
+    },
+  })
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-950/40 to-slate-900/60 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md border-slate-800 bg-slate-900/50">
@@ -20,53 +78,50 @@ export default function SignupPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="space-y-6" action="#" method="POST">
+          <Form className="space-y-6" method="post" {...getFormProps(form)}>
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-slate-300">
+              <label htmlFor={fields.name.id} className="block text-sm font-medium text-slate-300">
                 Full name
               </label>
               <Input
-                id="name"
-                name="name"
-                type="text"
-                autoComplete="name"
-                required
+                {...getInputProps(fields.name, { type: "text" })}
                 className="mt-1 bg-slate-800 text-slate-50 placeholder:text-slate-400"
                 placeholder="Enter your full name"
               />
+              {fields.name.errors && (
+                <p className="mt-2 text-sm text-red-500">{fields.name.errors.join(', ')}</p>
+              )}
             </div>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+              <label htmlFor={fields.email.id} className="block text-sm font-medium text-slate-300">
                 Email address
               </label>
               <Input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
+                {...getInputProps(fields.email, { type: "email" })}
                 className="mt-1 bg-slate-800 text-slate-50 placeholder:text-slate-400"
                 placeholder="Enter your email"
               />
+              {fields.email.errors && (
+                <p className="mt-2 text-sm text-red-500">{fields.email.errors.join(', ')}</p>
+              )}
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+              <label htmlFor={fields.password.id} className="block text-sm font-medium text-slate-300">
                 Password
               </label>
               <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
+                {...getInputProps(fields.password, { type: "password" })}
                 className="mt-1 bg-slate-800 text-slate-50 placeholder:text-slate-400"
                 placeholder="Create a password"
               />
+              {fields.password.errors && (
+                <p className="mt-2 text-sm text-red-500">{fields.password.errors.join(', ')}</p>
+              )}
             </div>
             <Button type="submit" className="w-full border border-gray-600 bg-gray-500/20 hover:bg-gray-500/40">
               Sign up
             </Button>
-          </form>
+          </Form>
 
           <div className="mt-6">
             <div className="relative">

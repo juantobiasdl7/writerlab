@@ -1,0 +1,51 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  username       String    @unique
+  password       Password?
+  profilePicture String?   @default("default-avatar.png") // URL to avatar image
+  bio           String?   // Optional bio text
+  website       String?   // Optional website URL
+  location      String?   // Optional location
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  books         Book[]    // Relation to books
+}
+
+model Password {
+  hash   String
+  userId String  @unique
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Book {
+  id          String    @id @default(cuid())
+  title       String
+  content     String    // Main content of the book
+  previewImage String?  // URL to preview image for dashboard card
+  authorId    String    // Reference to User
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  outline     Outline[] // Relation to outline items
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Outline {
+  id       String  @id @default(cuid())
+  title    String  // Chapter/section title
+  level    Int     // Heading level (1 for H1, 2 for H2, etc.)
+  position Int     // Position in the document
+  bookId   String
+  book     Book    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  
+  @@index([bookId, position]) // Index for efficient ordering
+}
